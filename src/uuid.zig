@@ -84,8 +84,6 @@ fn v7Timestamp() u60 {
 pub fn uuid7() UUID {
     var uuid: UUID = UUID{ .bytes = undefined };
     random.bytes(uuid.bytes[8..]);
-    uuid.bytes[6] = (uuid.bytes[6] & 0x0F) | 0x70;
-    uuid.bytes[8] = (uuid.bytes[8] & 0x3F) | 0x80;
 
     const timestamp: u60 = v7Timestamp();
     uuid.bytes[0] = @intCast(timestamp >> 52 & 0xFF);
