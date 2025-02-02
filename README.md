@@ -1,7 +1,7 @@
 # uuid-zig
 Universally Unique IDentifiers (UUIDs) https://www.rfc-editor.org/rfc/rfc9562.html
 
-Uses `std.crypto.random` to securely produce version 4 and version 7 UUIDs.
+Uses `std.crypto.random` to securely produce UUIDs.
 
 [![CI](https://github.com/oittaa/uuid-zig/actions/workflows/ci.yaml/badge.svg)](https://github.com/oittaa/uuid-zig/actions/workflows/ci.yaml)
 
@@ -13,16 +13,16 @@ const uuid = @import("uuid.zig");
 
 pub fn main() !void {
     // generate
-    const uuid1 = uuid.uuid4();
-    std.debug.print("{}\n", .{uuid1});
+    const uuid_v4 = uuid.uuid4();
+    std.debug.print("{}\n", .{uuid_v4});
 
-    const uuid2 = uuid.uuid7();
-    std.debug.print("{}\n", .{uuid2});
+    const uuid_v7 = uuid.uuid7();
+    std.debug.print("{}\n", .{uuid_v7});
 
     // parse
-    const uuid3 = try uuid.fromString("017f22e2-79b0-7cc3-98c4-dc0c0c07398f");
-    std.debug.print("{}\n", .{uuid3});
-    std.debug.print("{d}\n", .{uuid3.bytes});
+    const my_uuid = try uuid.fromString("017f22e2-79b0-7cc3-98c4-dc0c0c07398f");
+    std.debug.print("{}\n", .{my_uuid});
+    std.debug.print("{d}\n", .{my_uuid.bytes});
 }
 ```
 

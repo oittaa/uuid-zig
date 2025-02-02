@@ -1,6 +1,7 @@
 //! Universally Unique IDentifiers (UUIDs) RFC 9562
 const std = @import("std");
 const fmt = std.fmt;
+const hash = std.crypto.hash;
 const random = std.crypto.random;
 const testing = std.testing;
 
@@ -10,6 +11,11 @@ pub const Uuid = [36]u8;
 pub const UUID = struct {
     /// Acts like a buffer for the stored bytes.
     bytes: [16]u8,
+
+    /// Returns the UUID as an u128 int.
+    pub fn toInt(self: UUID) u128 {
+        return std.mem.readInt(u128, self.bytes[0..], .big);
+    }
 
     /// Returns the UUID as a string.
     pub fn toString(self: UUID) Uuid {
@@ -26,6 +32,11 @@ pub const UUID = struct {
             buf_ptr += 2;
         }
         return buf;
+    }
+
+    /// Returns the UUID version number.
+    pub fn version(self: UUID) u4 {
+        return @truncate(self.bytes[6] >> 4);
     }
 
     /// Converts the UUID to its string representation.
@@ -50,12 +61,97 @@ pub const max: UUID = UUID{
     .bytes = .{0xFF} ** 16,
 };
 
+pub const namespace = struct {
+    pub const dns = fromInt(0x6ba7b8109dad11d180b400c04fd430c8);
+    pub const url = fromInt(0x6ba7b8119dad11d180b400c04fd430c8);
+    pub const oid = fromInt(0x6ba7b8129dad11d180b400c04fd430c8);
+    pub const x500 = fromInt(0x6ba7b8149dad11d180b400c04fd430c8);
+};
+
+/// UUID Version 1
+/// UUIDv1 is a time-based UUID featuring a 60-bit timestamp represented by
+/// Coordinated Universal Time (UTC) as a count of 100-nanosecond intervals
+/// since 00:00:00.00, 15 October 1582 (the date of Gregorian reform to the
+/// Christian calendar).
+pub fn uuid1() UUID {
+    var uuid: UUID = UUID{ .bytes = undefined };
+    random.bytes(uuid.bytes[8..]);
+    const timestamp: u60 = v6Timestamp();
+    uuid.bytes[0] = @truncate(timestamp >> 24);
+    uuid.bytes[1] = @truncate(timestamp >> 16);
+    uuid.bytes[2] = @truncate(timestamp >> 8);
+    uuid.bytes[3] = @truncate(timestamp);
+    uuid.bytes[4] = @truncate(timestamp >> 40);
+    uuid.bytes[5] = @truncate(timestamp >> 32);
+    uuid.bytes[6] = @as(u8, @truncate(timestamp >> 56)) | 0x10; // version
+    uuid.bytes[7] = @truncate(timestamp >> 48);
+    uuid.bytes[8] = (uuid.bytes[8] & 0x3F) | 0x80; // variant
+    return uuid;
+}
+
+/// UUID Version 3
+/// UUIDv3 is meant for generating UUIDs from "names" that are drawn from, and unique within, some "namespace".
+pub fn uuid3(ns: UUID, name: []const u8) UUID {
+    var uuid: UUID = UUID{ .bytes = undefined };
+    var md5 = hash.Md5.init(.{});
+    md5.update(ns.bytes[0..]);
+    md5.update(name);
+    md5.final(uuid.bytes[0..]);
+    uuid.bytes[6] = (uuid.bytes[6] & 0x0F) | 0x30; // version
+    uuid.bytes[8] = (uuid.bytes[8] & 0x3F) | 0x80; // variant
+    return uuid;
+}
+
 /// UUID Version 4
 /// UUIDv4 is meant for generating UUIDs from truly random or pseudorandom numbers.
 pub fn uuid4() UUID {
     var uuid: UUID = UUID{ .bytes = undefined };
     random.bytes(uuid.bytes[0..]);
     uuid.bytes[6] = (uuid.bytes[6] & 0x0F) | 0x40; // version
+    uuid.bytes[8] = (uuid.bytes[8] & 0x3F) | 0x80; // variant
+    return uuid;
+}
+
+/// UUID Version 5
+/// UUIDv5 is meant for generating UUIDs from "names" that are drawn from, and unique within, some "namespace".
+pub fn uuid5(ns: UUID, name: []const u8) UUID {
+    var uuid: UUID = UUID{ .bytes = undefined };
+    var sha1 = hash.Sha1.init(.{});
+    sha1.update(ns.bytes[0..]);
+    sha1.update(name);
+    var buf: [20]u8 = undefined;
+    sha1.final(buf[0..]);
+    @memcpy(uuid.bytes[0..], buf[0..16]);
+    uuid.bytes[6] = (uuid.bytes[6] & 0x0F) | 0x50; // version
+    uuid.bytes[8] = (uuid.bytes[8] & 0x3F) | 0x80; // variant
+    return uuid;
+}
+
+fn v6Timestamp() u60 {
+    // 0x01b21dd213814000 is the number of 100-ns intervals between the
+    // UUID epoch 1582-10-15 00:00:00 and the Unix epoch 1970-01-01 00:00:00.
+    const Clock = struct {
+        var mutex: std.Thread.Mutex = .{};
+        var timestamp: u60 = 0;
+    };
+    Clock.mutex.lock();
+    defer Clock.mutex.unlock();
+    const nanos = std.time.nanoTimestamp();
+    var timestamp: u60 = @intCast(@divTrunc(nanos, 100) + 0x01b21dd213814000);
+    if (timestamp <= Clock.timestamp) timestamp = Clock.timestamp + 1;
+    Clock.timestamp = timestamp;
+    return timestamp;
+}
+
+/// UUID Version 6
+/// UUIDv6 is a field-compatible version of UUIDv1, reordered for improved DB locality.
+pub fn uuid6() UUID {
+    var uuid: UUID = UUID{ .bytes = undefined };
+    random.bytes(uuid.bytes[8..]);
+    const timestamp: u60 = v6Timestamp();
+    std.mem.writeInt(u48, uuid.bytes[0..6], @truncate(timestamp >> 12), .big);
+    uuid.bytes[6] = @as(u8, @truncate((timestamp >> 8) & 0x0F)) | 0x60; // version
+    uuid.bytes[7] = @truncate(timestamp);
     uuid.bytes[8] = (uuid.bytes[8] & 0x3F) | 0x80; // variant
     return uuid;
 }
@@ -84,17 +180,11 @@ fn v7Timestamp() u60 {
 pub fn uuid7() UUID {
     var uuid: UUID = UUID{ .bytes = undefined };
     random.bytes(uuid.bytes[8..]);
-
     const timestamp: u60 = v7Timestamp();
-    uuid.bytes[0] = @intCast(timestamp >> 52 & 0xFF);
-    uuid.bytes[1] = @intCast(timestamp >> 44 & 0xFF);
-    uuid.bytes[2] = @intCast(timestamp >> 36 & 0xFF);
-    uuid.bytes[3] = @intCast(timestamp >> 28 & 0xFF);
-    uuid.bytes[4] = @intCast(timestamp >> 20 & 0xFF);
-    uuid.bytes[5] = @intCast(timestamp >> 12 & 0xFF);
-    uuid.bytes[6] = @intCast((timestamp >> 8 & 0x0F) | 0x70); // version
-    uuid.bytes[7] = @intCast(timestamp & 0xFF);
-    uuid.bytes[8] = @intCast((uuid.bytes[8] & 0x3F) | 0x80); // variant
+    std.mem.writeInt(u48, uuid.bytes[0..6], @truncate(timestamp >> 12), .big);
+    uuid.bytes[6] = @as(u8, @truncate((timestamp >> 8) & 0x0F)) | 0x70; // version
+    uuid.bytes[7] = @truncate(timestamp);
+    uuid.bytes[8] = (uuid.bytes[8] & 0x3F) | 0x80; // variant
     return uuid;
 }
 
@@ -137,12 +227,54 @@ test "Max UUID" {
 }
 
 test "version and variant" {
-    const uuid_1: UUID = uuid4();
-    try testing.expectEqual(4, uuid_1.bytes[6] >> 4); // version
-    try testing.expectEqual(2, uuid_1.bytes[8] >> 6); // variant
-    const uuid_2: UUID = uuid7();
-    try testing.expectEqual(7, uuid_2.bytes[6] >> 4); // version
-    try testing.expectEqual(2, uuid_2.bytes[8] >> 6); // variant
+    const uuid_v1: UUID = uuid1();
+    try testing.expectEqual(1, uuid_v1.bytes[6] >> 4); // version
+    try testing.expectEqual(1, uuid_v1.version());
+    try testing.expectEqual(2, uuid_v1.bytes[8] >> 6); // variant
+    const uuid_v4: UUID = uuid4();
+    try testing.expectEqual(4, uuid_v4.bytes[6] >> 4); // version
+    try testing.expectEqual(4, uuid_v4.version());
+    try testing.expectEqual(2, uuid_v4.bytes[8] >> 6); // variant
+    const uuid_v6: UUID = uuid6();
+    try testing.expectEqual(6, uuid_v6.bytes[6] >> 4); // version
+    try testing.expectEqual(6, uuid_v6.version());
+    try testing.expectEqual(2, uuid_v6.bytes[8] >> 6); // variant
+    const uuid_v7: UUID = uuid7();
+    try testing.expectEqual(7, uuid_v7.bytes[6] >> 4); // version
+    try testing.expectEqual(7, uuid_v7.version());
+    try testing.expectEqual(2, uuid_v7.bytes[8] >> 6); // variant
+}
+
+test "UUID v3" {
+    const uuid = uuid3(namespace.dns, "www.example.com");
+    const uuid_str = uuid.toString();
+    try testing.expectEqualStrings("5df41881-3aed-3515-88a7-2f4a814cf09e", &uuid_str);
+}
+
+test "UUID v5" {
+    const uuid = uuid5(namespace.dns, "www.example.com");
+    const uuid_str = uuid.toString();
+    try testing.expectEqualStrings("2ed6657d-e927-568b-95e1-2665a8aea6a2", &uuid_str);
+}
+
+test "UUID v1 uniqueness" {
+    const num_uuids = 100;
+    var arena_allocator = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_allocator.deinit();
+    const allocator = &arena_allocator.allocator();
+    const uuids = try allocator.alloc(UUID, num_uuids);
+    defer allocator.free(uuids);
+
+    // Generate UUIDs
+    for (uuids) |*uuid| {
+        uuid.* = uuid1();
+    }
+    for (uuids, 1..) |uuid_1, i| {
+        // Check for duplicates
+        for (uuids[i..]) |uuid_2| {
+            try testing.expect(!std.mem.eql(u8, &uuid_1.bytes, &uuid_2.bytes));
+        }
+    }
 }
 
 test "UUID v4 uniqueness" {
@@ -162,6 +294,24 @@ test "UUID v4 uniqueness" {
         for (uuids[i..]) |uuid_2| {
             try testing.expect(!std.mem.eql(u8, &uuid_1.bytes, &uuid_2.bytes));
         }
+    }
+}
+
+test "UUID v6 monotonicity" {
+    const num_uuids = 1_000;
+    var arena_allocator = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_allocator.deinit();
+    const allocator = &arena_allocator.allocator();
+    const uuids = try allocator.alloc(UUID, num_uuids);
+    defer allocator.free(uuids);
+
+    // Generate UUIDs
+    for (uuids) |*uuid| {
+        uuid.* = uuid6();
+    }
+    var i: usize = 0;
+    while (i < uuids.len - 1) : (i += 1) {
+        try testing.expect(std.mem.lessThan(u8, &uuids[i].bytes, &uuids[i + 1].bytes));
     }
 }
 
@@ -200,6 +350,14 @@ test "fromInt and fromString match" {
     try testing.expectEqual(fromInt(0x0123456789ABCDEF0123456789ABCDEF), uuid);
 }
 
+test "toInt" {
+    const uuid = try fromString("01234567-89ab-cdef-0123-456789abcdef");
+    const uuid_int = uuid.toInt();
+    try testing.expectEqual(0x0123456789ABCDEF0123456789ABCDEF, uuid_int);
+    try testing.expectEqual(0, nil.toInt());
+    try testing.expectEqual((1 << 128) - 1, max.toInt());
+}
+
 test "format" {
     const uuids = [_][]const u8{
         "919108f7-52d1-4320-9bac-f847db4148a8",
@@ -236,4 +394,16 @@ test "Parsing invalid UUID strings - error.InvalidCharacter" {
     for (invalid_uuid_strs) |uuid_str| {
         try testing.expectError(error.InvalidCharacter, fromString(uuid_str));
     }
+}
+
+test "Namespaces" {
+    // https://www.rfc-editor.org/rfc/rfc9562.html#section-6.6
+    const dns_str = namespace.dns.toString();
+    const url_str = namespace.url.toString();
+    const oid_str = namespace.oid.toString();
+    const x500_str = namespace.x500.toString();
+    try testing.expectEqualStrings("6ba7b810-9dad-11d1-80b4-00c04fd430c8", &dns_str);
+    try testing.expectEqualStrings("6ba7b811-9dad-11d1-80b4-00c04fd430c8", &url_str);
+    try testing.expectEqualStrings("6ba7b812-9dad-11d1-80b4-00c04fd430c8", &oid_str);
+    try testing.expectEqualStrings("6ba7b814-9dad-11d1-80b4-00c04fd430c8", &x500_str);
 }
