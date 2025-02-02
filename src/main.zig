@@ -3,7 +3,7 @@ const uuid = @import("uuid.zig");
 
 pub fn main() !void {
     var print: bool = false;
-    var number: u32 = 1000;
+    var number: u32 = 1_000_000;
     var enable_v4: bool = true;
     var enable_v7: bool = true;
     const builtin = @import("builtin");
@@ -24,7 +24,7 @@ pub fn main() !void {
             number = std.fmt.parseInt(u32, arg, 10) catch |err| switch (err) {
                 error.InvalidCharacter, error.Overflow => {
                     const stderr = std.io.getStdErr().writer();
-                    try std.fmt.format(stderr, "Usage: [<number of UUIDs, default 1000>] [--print] [--disable-v4] [--disable-v7]\n", .{});
+                    try std.fmt.format(stderr, "Usage: [<number of UUIDs, default 1_000_000>] [--print] [--disable-v4] [--disable-v7]\n", .{});
                     std.process.exit(1);
                 },
             };
