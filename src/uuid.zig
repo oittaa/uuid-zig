@@ -19,19 +19,8 @@ pub const UUID = struct {
 
     /// Returns the UUID as a string.
     pub fn toString(self: UUID) Uuid {
-        const chars = "0123456789abcdef";
-        var buf: Uuid = undefined;
-        var buf_ptr: usize = 0;
-        for (self.bytes, 0..) |byte, i| {
-            if (i == 4 or i == 6 or i == 8 or i == 10) {
-                buf[buf_ptr] = '-';
-                buf_ptr += 1;
-            }
-            buf[buf_ptr] = chars[byte >> 4];
-            buf[buf_ptr + 1] = chars[byte & 15];
-            buf_ptr += 2;
-        }
-        return buf;
+        const buf: *Uuid = fmt.bytesToHex(self.bytes[0..4], .lower) ++ "-" ++ fmt.bytesToHex(self.bytes[4..6], .lower) ++ "-" ++ fmt.bytesToHex(self.bytes[6..8], .lower) ++ "-" ++ fmt.bytesToHex(self.bytes[8..10], .lower) ++ "-" ++ fmt.bytesToHex(self.bytes[10..16], .lower);
+        return buf.*;
     }
 
     /// Returns the UUID version number.
@@ -40,7 +29,14 @@ pub const UUID = struct {
     }
 
     /// Converts the UUID to its string representation.
-    pub fn format(self: UUID, comptime _: []const u8, _: fmt.FormatOptions, writer: anytype) (@TypeOf(writer).Error)!void {
+    pub fn format(
+        self: UUID,
+        comptime f: []const u8,
+        options: fmt.FormatOptions,
+        writer: anytype,
+    ) (@TypeOf(writer).Error)!void {
+        _ = options;
+        if (f.len != 0) fmt.invalidFmtError(f, self);
         try fmt.format(writer, "{}-{}-{}-{}-{}", .{
             fmt.fmtSliceHexLower(self.bytes[0..4]),
             fmt.fmtSliceHexLower(self.bytes[4..6]),
@@ -74,7 +70,7 @@ pub const namespace = struct {
 /// since 00:00:00.00, 15 October 1582 (the date of Gregorian reform to the
 /// Christian calendar).
 pub fn uuid1() UUID {
-    var uuid: UUID = UUID{ .bytes = undefined };
+    var uuid: UUID = undefined;
     random.bytes(uuid.bytes[8..]);
     const timestamp: u60 = v6Timestamp();
     uuid.bytes[0] = @truncate(timestamp >> 24);
@@ -86,17 +82,20 @@ pub fn uuid1() UUID {
     uuid.bytes[6] = @as(u8, @truncate(timestamp >> 56)) | 0x10; // version
     uuid.bytes[7] = @truncate(timestamp >> 48);
     uuid.bytes[8] = (uuid.bytes[8] & 0x3F) | 0x80; // variant
+    // After generating the 48-bit fully randomized node value, implementations
+    // MUST set the least significant bit of the first octet of the Node ID to 1
+    uuid.bytes[10] |= 1;
     return uuid;
 }
 
 /// UUID Version 3
 /// UUIDv3 is meant for generating UUIDs from "names" that are drawn from, and unique within, some "namespace".
 pub fn uuid3(ns: UUID, name: []const u8) UUID {
-    var uuid: UUID = UUID{ .bytes = undefined };
+    var uuid: UUID = undefined;
     var md5 = hash.Md5.init(.{});
     md5.update(ns.bytes[0..]);
     md5.update(name);
-    md5.final(uuid.bytes[0..]);
+    md5.final(uuid.bytes[0..]); // we can write directly since hash.Md5.digest_length is 16
     uuid.bytes[6] = (uuid.bytes[6] & 0x0F) | 0x30; // version
     uuid.bytes[8] = (uuid.bytes[8] & 0x3F) | 0x80; // variant
     return uuid;
@@ -105,7 +104,7 @@ pub fn uuid3(ns: UUID, name: []const u8) UUID {
 /// UUID Version 4
 /// UUIDv4 is meant for generating UUIDs from truly random or pseudorandom numbers.
 pub fn uuid4() UUID {
-    var uuid: UUID = UUID{ .bytes = undefined };
+    var uuid: UUID = undefined;
     random.bytes(uuid.bytes[0..]);
     uuid.bytes[6] = (uuid.bytes[6] & 0x0F) | 0x40; // version
     uuid.bytes[8] = (uuid.bytes[8] & 0x3F) | 0x80; // variant
@@ -115,11 +114,11 @@ pub fn uuid4() UUID {
 /// UUID Version 5
 /// UUIDv5 is meant for generating UUIDs from "names" that are drawn from, and unique within, some "namespace".
 pub fn uuid5(ns: UUID, name: []const u8) UUID {
-    var uuid: UUID = UUID{ .bytes = undefined };
+    var uuid: UUID = undefined;
     var sha1 = hash.Sha1.init(.{});
     sha1.update(ns.bytes[0..]);
     sha1.update(name);
-    var buf: [20]u8 = undefined;
+    var buf: [hash.Sha1.digest_length]u8 = undefined;
     sha1.final(buf[0..]);
     @memcpy(uuid.bytes[0..], buf[0..16]);
     uuid.bytes[6] = (uuid.bytes[6] & 0x0F) | 0x50; // version
@@ -146,7 +145,7 @@ fn v6Timestamp() u60 {
 /// UUID Version 6
 /// UUIDv6 is a field-compatible version of UUIDv1, reordered for improved DB locality.
 pub fn uuid6() UUID {
-    var uuid: UUID = UUID{ .bytes = undefined };
+    var uuid: UUID = undefined;
     random.bytes(uuid.bytes[8..]);
     const timestamp: u60 = v6Timestamp();
     std.mem.writeInt(u48, uuid.bytes[0..6], @truncate(timestamp >> 12), .big);
@@ -178,7 +177,7 @@ fn v7Timestamp() u60 {
 /// Monotonicity: Replace Leftmost Random Bits with Increased Clock Precision.
 /// (Method 3)
 pub fn uuid7() UUID {
-    var uuid: UUID = UUID{ .bytes = undefined };
+    var uuid: UUID = undefined;
     random.bytes(uuid.bytes[8..]);
     const timestamp: u60 = v7Timestamp();
     std.mem.writeInt(u48, uuid.bytes[0..6], @truncate(timestamp >> 12), .big);
@@ -246,12 +245,14 @@ test "version and variant" {
 }
 
 test "UUID v3" {
+    try testing.expectEqual(16, hash.Md5.digest_length);
     const uuid = uuid3(namespace.dns, "www.example.com");
     const uuid_str = uuid.toString();
     try testing.expectEqualStrings("5df41881-3aed-3515-88a7-2f4a814cf09e", &uuid_str);
 }
 
 test "UUID v5" {
+    try testing.expectEqual(20, hash.Sha1.digest_length);
     const uuid = uuid5(namespace.dns, "www.example.com");
     const uuid_str = uuid.toString();
     try testing.expectEqualStrings("2ed6657d-e927-568b-95e1-2665a8aea6a2", &uuid_str);

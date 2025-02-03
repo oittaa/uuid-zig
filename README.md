@@ -1,7 +1,7 @@
 # uuid-zig
-Universally Unique IDentifiers (UUIDs) https://www.rfc-editor.org/rfc/rfc9562.html
+Universally Unique IDentifiers (UUIDs) [RFC 9562](https://www.rfc-editor.org/rfc/rfc9562.html)
 
-Uses `std.crypto.random` to securely produce UUIDs.
+If UUIDs are required for use with any security operation within an application context in any shape or form, then UUIDv4 SHOULD be utilized. Uses `std.crypto.random` to generate UUIDs.
 
 [![CI](https://github.com/oittaa/uuid-zig/actions/workflows/ci.yaml/badge.svg)](https://github.com/oittaa/uuid-zig/actions/workflows/ci.yaml)
 
@@ -13,8 +13,20 @@ const uuid = @import("uuid.zig");
 
 pub fn main() !void {
     // generate
+    const uuid_v1 = uuid.uuid1();
+    std.debug.print("{}\n", .{uuid_v1});
+
+    const uuid_v3 = uuid.uuid3(uuid.namespace.dns, "www.example.com");
+    std.debug.print("{}\n", .{uuid_v3});
+
     const uuid_v4 = uuid.uuid4();
     std.debug.print("{}\n", .{uuid_v4});
+
+    const uuid_v5 = uuid.uuid5(uuid.namespace.url, "https://ziglang.org/");
+    std.debug.print("{}\n", .{uuid_v5});
+
+    const uuid_v6 = uuid.uuid6();
+    std.debug.print("{}\n", .{uuid_v6});
 
     const uuid_v7 = uuid.uuid7();
     std.debug.print("{}\n", .{uuid_v7});
@@ -28,8 +40,12 @@ pub fn main() !void {
 
 ```
 $ zig run example.zig 
-388454e8-fb01-41ec-8319-87e9241914d5
-0194c1d4-3d96-7c24-b06e-c159aac051a8
+843ca0f0-e211-11ef-9b7b-d1c49c4f52c1
+5df41881-3aed-3515-88a7-2f4a814cf09e
+53ca4995-31be-4398-b2c0-8ad34104f0eb
+708762e7-188c-5d58-b008-f4d694f0bf6d
+1efe2118-43cb-634c-9fcf-c2765e4be199
+0194cb25-b3b2-7b33-ac38-31349ded7498
 017f22e2-79b0-7cc3-98c4-dc0c0c07398f
 { 1, 127, 34, 226, 121, 176, 124, 195, 152, 196, 220, 12, 12, 7, 57, 143 }
 ```
