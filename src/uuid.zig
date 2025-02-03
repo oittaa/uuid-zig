@@ -1,58 +1,54 @@
 //! Universally Unique IDentifiers (UUIDs) RFC 9562
+
 const std = @import("std");
 const fmt = std.fmt;
 const hash = std.crypto.hash;
 const random = std.crypto.random;
-const testing = std.testing;
+const Uuid = @This();
 
-pub const Uuid = [36]u8;
+bytes: [16]u8,
 
-pub const UUID = struct {
-    /// Acts like a buffer for the stored bytes.
-    bytes: [16]u8,
+/// Returns the UUID as an u128 int.
+pub fn toInt(self: Uuid) u128 {
+    return std.mem.readInt(u128, self.bytes[0..], .big);
+}
 
-    /// Returns the UUID as an u128 int.
-    pub fn toInt(self: UUID) u128 {
-        return std.mem.readInt(u128, self.bytes[0..], .big);
-    }
+/// Returns the UUID as a string.
+pub fn toString(self: Uuid) [36]u8 {
+    const buf: *[36]u8 = fmt.bytesToHex(self.bytes[0..4], .lower) ++ "-" ++ fmt.bytesToHex(self.bytes[4..6], .lower) ++ "-" ++ fmt.bytesToHex(self.bytes[6..8], .lower) ++ "-" ++ fmt.bytesToHex(self.bytes[8..10], .lower) ++ "-" ++ fmt.bytesToHex(self.bytes[10..16], .lower);
+    return buf.*;
+}
 
-    /// Returns the UUID as a string.
-    pub fn toString(self: UUID) Uuid {
-        const buf: *Uuid = fmt.bytesToHex(self.bytes[0..4], .lower) ++ "-" ++ fmt.bytesToHex(self.bytes[4..6], .lower) ++ "-" ++ fmt.bytesToHex(self.bytes[6..8], .lower) ++ "-" ++ fmt.bytesToHex(self.bytes[8..10], .lower) ++ "-" ++ fmt.bytesToHex(self.bytes[10..16], .lower);
-        return buf.*;
-    }
+/// Returns the UUID version number.
+pub fn version(self: Uuid) u4 {
+    return @truncate(self.bytes[6] >> 4);
+}
 
-    /// Returns the UUID version number.
-    pub fn version(self: UUID) u4 {
-        return @truncate(self.bytes[6] >> 4);
-    }
-
-    /// Converts the UUID to its string representation.
-    pub fn format(
-        self: UUID,
-        comptime f: []const u8,
-        options: fmt.FormatOptions,
-        writer: anytype,
-    ) (@TypeOf(writer).Error)!void {
-        _ = options;
-        if (f.len != 0) fmt.invalidFmtError(f, self);
-        try fmt.format(writer, "{}-{}-{}-{}-{}", .{
-            fmt.fmtSliceHexLower(self.bytes[0..4]),
-            fmt.fmtSliceHexLower(self.bytes[4..6]),
-            fmt.fmtSliceHexLower(self.bytes[6..8]),
-            fmt.fmtSliceHexLower(self.bytes[8..10]),
-            fmt.fmtSliceHexLower(self.bytes[10..16]),
-        });
-    }
-};
+/// Converts the UUID to its string representation.
+pub fn format(
+    self: Uuid,
+    comptime f: []const u8,
+    options: fmt.FormatOptions,
+    writer: anytype,
+) (@TypeOf(writer).Error)!void {
+    _ = options;
+    if (f.len != 0) fmt.invalidFmtError(f, self);
+    try fmt.format(writer, "{}-{}-{}-{}-{}", .{
+        fmt.fmtSliceHexLower(self.bytes[0..4]),
+        fmt.fmtSliceHexLower(self.bytes[4..6]),
+        fmt.fmtSliceHexLower(self.bytes[6..8]),
+        fmt.fmtSliceHexLower(self.bytes[8..10]),
+        fmt.fmtSliceHexLower(self.bytes[10..16]),
+    });
+}
 
 /// The Nil UUID is special form of UUID that is specified to have all 128 bits set to zero.
-pub const nil: UUID = UUID{
+pub const nil: Uuid = Uuid{
     .bytes = .{0} ** 16,
 };
 
 /// The Max UUID is a special form of UUID that is specified to have all 128 bits set to 1.
-pub const max: UUID = UUID{
+pub const max: Uuid = Uuid{
     .bytes = .{0xFF} ** 16,
 };
 
@@ -68,8 +64,8 @@ pub const namespace = struct {
 /// Coordinated Universal Time (UTC) as a count of 100-nanosecond intervals
 /// since 00:00:00.00, 15 October 1582 (the date of Gregorian reform to the
 /// Christian calendar).
-pub fn uuid1() UUID {
-    var uuid: UUID = undefined;
+pub fn uuid1() Uuid {
+    var uuid: Uuid = undefined;
     random.bytes(uuid.bytes[8..]);
     const timestamp: u60 = v6Timestamp();
     uuid.bytes[0] = @truncate(timestamp >> 24);
@@ -89,8 +85,8 @@ pub fn uuid1() UUID {
 
 /// UUID Version 3
 /// UUIDv3 is meant for generating UUIDs from "names" that are drawn from, and unique within, some "namespace".
-pub fn uuid3(ns: UUID, name: []const u8) UUID {
-    var uuid: UUID = undefined;
+pub fn uuid3(ns: Uuid, name: []const u8) Uuid {
+    var uuid: Uuid = undefined;
     var md5 = hash.Md5.init(.{});
     md5.update(ns.bytes[0..]);
     md5.update(name);
@@ -102,8 +98,8 @@ pub fn uuid3(ns: UUID, name: []const u8) UUID {
 
 /// UUID Version 4
 /// UUIDv4 is meant for generating UUIDs from truly random or pseudorandom numbers.
-pub fn uuid4() UUID {
-    var uuid: UUID = undefined;
+pub fn uuid4() Uuid {
+    var uuid: Uuid = undefined;
     random.bytes(uuid.bytes[0..]);
     uuid.bytes[6] = (uuid.bytes[6] & 0x0F) | 0x40; // version
     uuid.bytes[8] = (uuid.bytes[8] & 0x3F) | 0x80; // variant
@@ -112,8 +108,8 @@ pub fn uuid4() UUID {
 
 /// UUID Version 5
 /// UUIDv5 is meant for generating UUIDs from "names" that are drawn from, and unique within, some "namespace".
-pub fn uuid5(ns: UUID, name: []const u8) UUID {
-    var uuid: UUID = undefined;
+pub fn uuid5(ns: Uuid, name: []const u8) Uuid {
+    var uuid: Uuid = undefined;
     var sha1 = hash.Sha1.init(.{});
     sha1.update(ns.bytes[0..]);
     sha1.update(name);
@@ -143,8 +139,8 @@ fn v6Timestamp() u60 {
 
 /// UUID Version 6
 /// UUIDv6 is a field-compatible version of UUIDv1, reordered for improved DB locality.
-pub fn uuid6() UUID {
-    var uuid: UUID = undefined;
+pub fn uuid6() Uuid {
+    var uuid: Uuid = undefined;
     random.bytes(uuid.bytes[8..]);
     const timestamp: u60 = v6Timestamp();
     std.mem.writeInt(u48, uuid.bytes[0..6], @truncate(timestamp >> 12), .big);
@@ -175,8 +171,8 @@ fn v7Timestamp() u60 {
 /// Generally, UUIDv7 has improved entropy characteristics over UUIDv1.
 /// Monotonicity: Replace Leftmost Random Bits with Increased Clock Precision.
 /// (Method 3)
-pub fn uuid7() UUID {
-    var uuid: UUID = undefined;
+pub fn uuid7() Uuid {
+    var uuid: Uuid = undefined;
     random.bytes(uuid.bytes[8..]);
     const timestamp: u60 = v7Timestamp();
     std.mem.writeInt(u48, uuid.bytes[0..6], @truncate(timestamp >> 12), .big);
@@ -186,10 +182,10 @@ pub fn uuid7() UUID {
     return uuid;
 }
 
-pub fn fromString(buf: []const u8) !UUID {
+pub fn fromString(buf: []const u8) !Uuid {
     if (buf.len != 36) return error.InvalidLength;
     if (buf[8] != '-' or buf[13] != '-' or buf[18] != '-' or buf[23] != '-') return error.InvalidCharacter;
-    var uuid: UUID = undefined;
+    var uuid: Uuid = undefined;
     _ = try fmt.hexToBytes(uuid.bytes[0..4], buf[0..8]);
     _ = try fmt.hexToBytes(uuid.bytes[4..6], buf[9..13]);
     _ = try fmt.hexToBytes(uuid.bytes[6..8], buf[14..18]);
@@ -199,11 +195,13 @@ pub fn fromString(buf: []const u8) !UUID {
 }
 
 /// Creates a UUID from a u128-bit integer.
-pub fn fromInt(int: u128) UUID {
-    var uuid: UUID = undefined;
+pub fn fromInt(int: u128) Uuid {
+    var uuid: Uuid = undefined;
     std.mem.writeInt(u128, uuid.bytes[0..], int, .big);
     return uuid;
 }
+
+const testing = std.testing;
 
 test "Nil UUID" {
     const nil_uuid_str = nil.toString();
@@ -216,19 +214,19 @@ test "Max UUID" {
 }
 
 test "version and variant" {
-    const uuid_v1: UUID = uuid1();
+    const uuid_v1: Uuid = uuid1();
     try testing.expectEqual(1, uuid_v1.bytes[6] >> 4); // version
     try testing.expectEqual(1, uuid_v1.version());
     try testing.expectEqual(2, uuid_v1.bytes[8] >> 6); // variant
-    const uuid_v4: UUID = uuid4();
+    const uuid_v4: Uuid = uuid4();
     try testing.expectEqual(4, uuid_v4.bytes[6] >> 4); // version
     try testing.expectEqual(4, uuid_v4.version());
     try testing.expectEqual(2, uuid_v4.bytes[8] >> 6); // variant
-    const uuid_v6: UUID = uuid6();
+    const uuid_v6: Uuid = uuid6();
     try testing.expectEqual(6, uuid_v6.bytes[6] >> 4); // version
     try testing.expectEqual(6, uuid_v6.version());
     try testing.expectEqual(2, uuid_v6.bytes[8] >> 6); // variant
-    const uuid_v7: UUID = uuid7();
+    const uuid_v7: Uuid = uuid7();
     try testing.expectEqual(7, uuid_v7.bytes[6] >> 4); // version
     try testing.expectEqual(7, uuid_v7.version());
     try testing.expectEqual(2, uuid_v7.bytes[8] >> 6); // variant
@@ -253,7 +251,7 @@ test "UUID v1 uniqueness" {
     var arena_allocator = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_allocator.deinit();
     const allocator = &arena_allocator.allocator();
-    const uuids = try allocator.alloc(UUID, num_uuids);
+    const uuids = try allocator.alloc(Uuid, num_uuids);
     defer allocator.free(uuids);
 
     // Generate UUIDs
@@ -273,7 +271,7 @@ test "UUID v4 uniqueness" {
     var arena_allocator = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_allocator.deinit();
     const allocator = &arena_allocator.allocator();
-    const uuids = try allocator.alloc(UUID, num_uuids);
+    const uuids = try allocator.alloc(Uuid, num_uuids);
     defer allocator.free(uuids);
 
     // Generate UUIDs
@@ -293,7 +291,7 @@ test "UUID v6 monotonicity" {
     var arena_allocator = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_allocator.deinit();
     const allocator = &arena_allocator.allocator();
-    const uuids = try allocator.alloc(UUID, num_uuids);
+    const uuids = try allocator.alloc(Uuid, num_uuids);
     defer allocator.free(uuids);
 
     // Generate UUIDs
@@ -311,7 +309,7 @@ test "UUID v7 monotonicity" {
     var arena_allocator = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_allocator.deinit();
     const allocator = &arena_allocator.allocator();
-    const uuids = try allocator.alloc(UUID, num_uuids);
+    const uuids = try allocator.alloc(Uuid, num_uuids);
     defer allocator.free(uuids);
 
     // Generate UUIDs
