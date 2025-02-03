@@ -1,5 +1,5 @@
 const std = @import("std");
-const uuid = @import("uuid.zig");
+const Uuid = @import("Uuid.zig");
 
 pub fn main() !void {
     var print: bool = false;
@@ -41,14 +41,14 @@ fn benchmrk(version: u8, number: u32, print: bool) !void {
     defer if (gpa.deinit() == .leak) std.fmt.format(stderr, "WARNING: memory leak!\n", .{}) catch unreachable;
     const allocator = gpa.allocator();
 
-    var print_buffer = try allocator.alloc(uuid.UUID, if (print) number else 0);
+    var print_buffer = try allocator.alloc(Uuid, if (print) number else 0);
     defer allocator.free(print_buffer);
     var timer = try std.time.Timer.start();
     var i: usize = 0;
     while (i < number) : (i += 1) {
-        const my_uuid: uuid.UUID = switch (version) {
-            4 => uuid.uuid4(),
-            7 => uuid.uuid7(),
+        const my_uuid: Uuid = switch (version) {
+            4 => Uuid.uuid4(),
+            7 => Uuid.uuid7(),
             else => {
                 try std.fmt.format(stderr, "ERROR: unsupported version\n", .{});
                 std.process.exit(1);
@@ -68,6 +68,14 @@ fn benchmrk(version: u8, number: u32, print: bool) !void {
         const duration_per_uuid = @as(u64, @intFromFloat(@as(f64, @floatFromInt(duration)) / @as(f64, @floatFromInt(number))));
         try std.fmt.format(stdout, "{d} UUIDv{d}s in {} = {}/UUID\n", .{ number, version, std.fmt.fmtDuration(duration), std.fmt.fmtDuration(duration_per_uuid) });
     }
+}
+
+test "can generate UUIDv4 and UUIDv7" {
+    const testing = std.testing;
+    const uuid_v4 = Uuid.uuid4();
+    try testing.expectEqual(4, uuid_v4.version());
+    const uuid_v7 = Uuid.uuid7();
+    try testing.expectEqual(7, uuid_v7.version());
 }
 
 test "args - get an iterator, no allocation but not fully portable" {

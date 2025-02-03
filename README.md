@@ -9,30 +9,30 @@ If UUIDs are required for use with any security operation within an application 
 
 ```zig
 const std = @import("std");
-const uuid = @import("uuid.zig");
+const Uuid = @import("Uuid.zig");
 
 pub fn main() !void {
     // generate
-    const uuid_v1 = uuid.uuid1();
+    const uuid_v1 = Uuid.uuid1();
     std.debug.print("{}\n", .{uuid_v1});
 
-    const uuid_v3 = uuid.uuid3(uuid.namespace.dns, "www.example.com");
+    const uuid_v3 = Uuid.uuid3(Uuid.namespace.dns, "www.example.com");
     std.debug.print("{}\n", .{uuid_v3});
 
-    const uuid_v4 = uuid.uuid4();
+    const uuid_v4 = Uuid.uuid4();
     std.debug.print("{}\n", .{uuid_v4});
 
-    const uuid_v5 = uuid.uuid5(uuid.namespace.url, "https://ziglang.org/");
+    const uuid_v5 = Uuid.uuid5(Uuid.namespace.url, "https://ziglang.org/");
     std.debug.print("{}\n", .{uuid_v5});
 
-    const uuid_v6 = uuid.uuid6();
+    const uuid_v6 = Uuid.uuid6();
     std.debug.print("{}\n", .{uuid_v6});
 
-    const uuid_v7 = uuid.uuid7();
+    const uuid_v7 = Uuid.uuid7();
     std.debug.print("{}\n", .{uuid_v7});
 
     // parse
-    const my_uuid = try uuid.fromString("017f22e2-79b0-7cc3-98c4-dc0c0c07398f");
+    const my_uuid = try Uuid.fromString("017f22e2-79b0-7cc3-98c4-dc0c0c07398f");
     std.debug.print("{}\n", .{my_uuid});
     std.debug.print("{d}\n", .{my_uuid.bytes});
 }
