@@ -5,7 +5,6 @@ const hash = std.crypto.hash;
 const random = std.crypto.random;
 const testing = std.testing;
 
-pub const UuidError = error{ InvalidFormat, InvalidCharacter };
 pub const Uuid = [36]u8;
 
 pub const UUID = struct {
@@ -187,24 +186,15 @@ pub fn uuid7() UUID {
     return uuid;
 }
 
-/// Creates a UUID from the UUID string format.
-pub fn fromString(buf: []const u8) UuidError!UUID {
-    if (buf.len != 36 or buf[8] != '-' or buf[13] != '-' or buf[18] != '-' or buf[23] != '-')
-        return error.InvalidFormat;
+pub fn fromString(buf: []const u8) !UUID {
+    if (buf.len != 36) return error.InvalidLength;
+    if (buf[8] != '-' or buf[13] != '-' or buf[18] != '-' or buf[23] != '-') return error.InvalidCharacter;
     var uuid: UUID = undefined;
-    var i: usize = 0;
-    var hyp_counter: u3 = 0;
-    for (uuid.bytes[0..]) |*byte| {
-        if (buf[i] == '-') {
-            i += 1;
-            hyp_counter += 1;
-            if (hyp_counter > 4) return error.InvalidFormat;
-        }
-        const hi = try fmt.charToDigit(buf[i], 16);
-        const lo = try fmt.charToDigit(buf[i + 1], 16);
-        byte.* = hi << 4 | lo;
-        i += 2;
-    }
+    _ = try fmt.hexToBytes(uuid.bytes[0..4], buf[0..8]);
+    _ = try fmt.hexToBytes(uuid.bytes[4..6], buf[9..13]);
+    _ = try fmt.hexToBytes(uuid.bytes[6..8], buf[14..18]);
+    _ = try fmt.hexToBytes(uuid.bytes[8..10], buf[19..23]);
+    _ = try fmt.hexToBytes(uuid.bytes[10..16], buf[24..36]);
     return uuid;
 }
 
@@ -376,11 +366,10 @@ test "Parsing invalid UUID strings - error.InvalidFormat" {
         "123e4567-e89b-12d3-a456-42661417400", // Too short
         "123e4567-e89b-12d3-a456-4266141740000", // Too long
         "123e4567e89b12d3a456426614174000", // Missing hyphens
-        "-01-4567-89ab-cdef-0123-456789abcdef", // Extra hyphens
         "", // Empty string
     };
     for (invalid_uuid_strs) |uuid_str| {
-        try testing.expectError(error.InvalidFormat, fromString(uuid_str));
+        try testing.expectError(error.InvalidLength, fromString(uuid_str));
     }
 }
 
@@ -390,6 +379,7 @@ test "Parsing invalid UUID strings - error.InvalidCharacter" {
         "123e4567-e89b-12d3-a456-42661417400z", // Invalid hex character 'z'
         "123e4567-e89b-12d3-a456-42661417400 ", // Trailing space
         "123e4567-e89b-12d3-a456-42661417400-", // Trailing hyphen
+        "12-e4-67-e89b-12d3-a456-426614174000", // Extra hyphens
         "------------------------------------", // Only hyphens
     };
     for (invalid_uuid_strs) |uuid_str| {
