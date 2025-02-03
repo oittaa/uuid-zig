@@ -8,12 +8,12 @@ const Uuid = @This();
 
 bytes: [16]u8,
 
-/// Returns the UUID as an u128 int.
+/// Returns the UUID as an unsigned 128-bit integer.
 pub fn toInt(self: Uuid) u128 {
     return std.mem.readInt(u128, self.bytes[0..], .big);
 }
 
-/// Returns the UUID as a string.
+/// Returns the UUID string representation.
 pub fn toString(self: Uuid) [36]u8 {
     const buf: *[36]u8 = fmt.bytesToHex(self.bytes[0..4], .lower) ++ "-" ++ fmt.bytesToHex(self.bytes[4..6], .lower) ++ "-" ++ fmt.bytesToHex(self.bytes[6..8], .lower) ++ "-" ++ fmt.bytesToHex(self.bytes[8..10], .lower) ++ "-" ++ fmt.bytesToHex(self.bytes[10..16], .lower);
     return buf.*;
@@ -24,7 +24,7 @@ pub fn version(self: Uuid) u4 {
     return @truncate(self.bytes[6] >> 4);
 }
 
-/// Converts the UUID to its string representation.
+/// Converts the UUID to the UUID string representation.
 pub fn format(
     self: Uuid,
     comptime f: []const u8,
@@ -52,6 +52,8 @@ pub const max: Uuid = Uuid{
     .bytes = .{0xFF} ** 16,
 };
 
+/// Namespace IDs for some potentially interesting namespaces such as those for
+/// DNS, URLs, OIDs, and DNs.
 pub const namespace = struct {
     pub const dns = fromInt(0x6ba7b8109dad11d180b400c04fd430c8);
     pub const url = fromInt(0x6ba7b8119dad11d180b400c04fd430c8);
@@ -121,9 +123,9 @@ pub fn uuid5(ns: Uuid, name: []const u8) Uuid {
     return uuid;
 }
 
+// 0x01b21dd213814000 is the number of 100-ns intervals between the UUID epoch
+// 1582-10-15 00:00:00 and the Unix epoch 1970-01-01 00:00:00.
 fn v6Timestamp() u60 {
-    // 0x01b21dd213814000 is the number of 100-ns intervals between the
-    // UUID epoch 1582-10-15 00:00:00 and the Unix epoch 1970-01-01 00:00:00.
     const Clock = struct {
         var mutex: std.Thread.Mutex = .{};
         var timestamp: u60 = 0;
@@ -150,6 +152,19 @@ pub fn uuid6() Uuid {
     return uuid;
 }
 
+// For UUIDv7, which has millisecond timestamp precision, it is possible to use
+// additional clock precision available on the system to substitute for up to
+// 12 random bits immediately following the timestamp.
+//
+// To calculate this value, start with the portion of the timestamp expressed
+// as a fraction of the clock's tick value (fraction of a millisecond for
+// UUIDv7). Compute the count of possible values that can be represented in the
+// available bit space, 4096 for the UUIDv7 rand_a field. Using floating point
+// or scaled integer arithmetic, multiply this fraction of a millisecond value
+// by 4096 and round down (toward zero) to an integer result to arrive at a
+// number between 0 and the maximum allowed for the indicated bits, which sorts
+// monotonically based on time. Each increasing fractional value will result in
+// an increasing bit field value to the precision available with these bits.
 fn v7Timestamp() u60 {
     const Clock = struct {
         var mutex: std.Thread.Mutex = .{};
@@ -182,6 +197,7 @@ pub fn uuid7() Uuid {
     return uuid;
 }
 
+/// Creates a UUID from the UUID string representation.
 pub fn fromString(buf: []const u8) !Uuid {
     if (buf.len != 36) return error.InvalidLength;
     if (buf[8] != '-' or buf[13] != '-' or buf[18] != '-' or buf[23] != '-') return error.InvalidCharacter;
@@ -194,7 +210,7 @@ pub fn fromString(buf: []const u8) !Uuid {
     return uuid;
 }
 
-/// Creates a UUID from a u128-bit integer.
+/// Creates a UUID from an unsigned 128-bit integer.
 pub fn fromInt(int: u128) Uuid {
     var uuid: Uuid = undefined;
     std.mem.writeInt(u128, uuid.bytes[0..], int, .big);
@@ -323,7 +339,7 @@ test "UUID v7 monotonicity" {
 }
 
 test "fromString" {
-    const uuid = try fromString("01234567-89ab-CDEF-0123-456789abcdef");
+    const uuid = try fromString("01234567-89ab-CDEF-0123-456789abcdef"); // mixed case
     const uuid_str = uuid.toString();
     try testing.expectEqualStrings("01234567-89ab-cdef-0123-456789abcdef", &uuid_str);
 }
