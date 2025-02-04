@@ -375,7 +375,7 @@ test "format" {
     }
 }
 
-test "Parsing invalid UUID strings - error.InvalidFormat" {
+test "Parsing invalid UUID strings - error.InvalidLength" {
     const invalid_uuid_strs = [_][]const u8{
         "123e4567-e89b-12d3-a456-42661417400", // Too short
         "123e4567-e89b-12d3-a456-4266141740000", // Too long
