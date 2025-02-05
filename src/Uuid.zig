@@ -9,18 +9,22 @@ const Uuid = @This();
 bytes: [16]u8,
 
 /// Returns the UUID as an unsigned 128-bit integer.
-pub fn toInt(self: Uuid) u128 {
+pub fn toInt(self: *const Uuid) u128 {
     return std.mem.readInt(u128, self.bytes[0..], .big);
 }
 
 /// Returns the UUID string representation.
-pub fn toString(self: Uuid) [36]u8 {
-    const buf: *[36]u8 = fmt.bytesToHex(self.bytes[0..4], .lower) ++ "-" ++ fmt.bytesToHex(self.bytes[4..6], .lower) ++ "-" ++ fmt.bytesToHex(self.bytes[6..8], .lower) ++ "-" ++ fmt.bytesToHex(self.bytes[8..10], .lower) ++ "-" ++ fmt.bytesToHex(self.bytes[10..16], .lower);
+pub fn toString(self: *const Uuid) [36]u8 {
+    const buf: *const [36]u8 = fmt.bytesToHex(self.bytes[0..4], .lower) ++
+        "-" ++ fmt.bytesToHex(self.bytes[4..6], .lower) ++
+        "-" ++ fmt.bytesToHex(self.bytes[6..8], .lower) ++
+        "-" ++ fmt.bytesToHex(self.bytes[8..10], .lower) ++
+        "-" ++ fmt.bytesToHex(self.bytes[10..16], .lower);
     return buf.*;
 }
 
 /// Returns the UUID version number.
-pub fn version(self: Uuid) u4 {
+pub fn version(self: *const Uuid) u4 {
     return @truncate(self.bytes[6] >> 4);
 }
 
